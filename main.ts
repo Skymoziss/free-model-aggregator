@@ -241,9 +241,9 @@ async function servePrompt(
   wire: 'openai' | 'anthropic',
   body: Json,
   first: ModelRow,
+  requires: Requirement,
   res: ServerResponse,
 ): Promise<'served' | null> {
-  const requires = requirementsFromBody(body);
   const chain = candidatesFor(requires);
   const ordered = [first, ...chain.filter((m) => m.id !== first.id)].slice(0, MAX_CANDIDATES);
   const failures: Array<{ status: number; code: string; model: string | null }> = [];
@@ -288,10 +288,11 @@ async function servePrompt(
 async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = await readJson(req);
   if (body === null) return sendError(res, 'openai', 400, 'invalid_request_error', 'the request body is not one JSON object');
-  const route = routeFor(requirementsFor(body));
+  const requires = requirementsFor(body);
+  const route = routeFor(requires);
   if (route === null) return sendError(res, 'openai', 503, 'no_free_model', 'no free model in the brief meets this request');
   const wire = 'openai' as const;
-  const outcome = await servePrompt(wire, body, route, res);
+  const outcome = await servePrompt(wire, body, route, requires, res);
   if (outcome !== null) return;
   sendError(res, wire, 502, 'upstream_error', 'every free model refused this request');
 }
@@ -300,10 +301,11 @@ async function chat(req: IncomingMessage, res: ServerResponse): Promise<void> {
 async function messages(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = await readJson(req);
   if (body === null) return sendError(res, 'anthropic', 400, 'invalid_request_error', 'the request body is not one JSON object');
-  const route = routeFor(requirementsFor(body));
+  const requires = requirementsFor(body);
+  const route = routeFor(requires);
   if (route === null) return sendError(res, 'anthropic', 503, 'overloaded_error', 'no free model in the brief meets this request');
   const wire = 'anthropic' as const;
-  const outcome = await servePrompt(wire, body, route, res);
+  const outcome = await servePrompt(wire, body, route, requires, res);
   if (outcome !== null) return;
   sendError(res, wire, 502, 'api_error', 'every free model refused this request');
 }
